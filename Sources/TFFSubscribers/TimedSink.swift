@@ -83,7 +83,7 @@ extension TimedSink: Subscriber, Cancellable
     finally(completion)
   }
 
-  public func startReceiving()
+  public func initiateReceiving()
   {
     guard start == false else { return }
 

@@ -24,7 +24,7 @@ final class TFFSubscribersTests: XCTestCase
     )
 
     let start = Date()
-    s.startReceiving()
+    s.initiateReceiving()
     waitForExpectations(timeout: 1.0)
     XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(start), 0.02)
   }
