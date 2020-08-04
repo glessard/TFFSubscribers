@@ -1,38 +1,66 @@
 import Combine
 import Dispatch
+import CurrentQoS
 
-public class TimedSink<Input, Failure: Error>: Subscriber, Cancellable
+public class TimedSink<Upstream: Publisher, Context: Scheduler>
 {
+  public typealias Input =   Upstream.Output
+  public typealias Failure = Upstream.Failure
+
   public let combineIdentifier = CombineIdentifier()
 
   private let lock = Lock()
   private var subscription: Subscription?
-  private let q = DispatchQueue(label: "timed-requests", qos: .background)
 
+  private let scheduler: Context
   private let present: (Input) -> Void
   private let finally: (Subscribers.Completion<Failure>) -> Void
-  private let gap: DispatchTimeInterval
+  private let gap: Context.SchedulerTimeType.Stride
+  private var start: Bool
 
-  public init(completion: @escaping (Subscribers.Completion<Failure>) -> Void = { _ in },
+  public init(upstream: Upstream,
+              context: Context,
+              completion: @escaping (Subscribers.Completion<Failure>) -> Void = { _ in },
               receive: @escaping (Input) -> Void,
-              interval: DispatchTimeInterval = .seconds(1))
+              interval: Context.SchedulerTimeType.Stride,
+              autostart: Bool = true)
   {
+    scheduler = context
     finally = completion
     present = receive
     gap = interval
+    start = autostart
+
+    upstream.receive(on: context).subscribe(self)
   }
 
   deinit {
     subscription?.cancel()
     lock.clean()
   }
+}
 
+extension TimedSink where Context == DispatchQueue
+{
+  public convenience init(upstream: Upstream, qos: DispatchQoS = .current,
+                          completion: @escaping(Subscribers.Completion<Failure>) -> Void = { _ in },
+                          receive: @escaping (Input) -> Void,
+                          interval: Context.SchedulerTimeType.Stride,
+                          autostart: Bool = true)
+  {
+    let queue = DispatchQueue(label: #function, qos: qos)
+    self.init(upstream: upstream, context: queue, completion: completion, receive: receive, interval: interval, autostart: autostart)
+  }
+}
+
+extension TimedSink: Subscriber, Cancellable
+{
   public func receive(subscription: Subscription)
   {
     lock.lock()
     self.subscription = subscription
     lock.unlock()
-    subscription.request(.max(1))
+    subscription.request(start ? .max(1) : .none)
   }
 
   public func receive(_ input: Input) -> Subscribers.Demand
@@ -43,7 +71,7 @@ public class TimedSink<Input, Failure: Error>: Subscriber, Cancellable
     lock.unlock()
     if let sub = sub
     {
-      q.schedule(after: .init(.now() + gap), tolerance: .init(gap)) { sub.request(.max(1)) }
+      scheduler.schedule(after: scheduler.now.advanced(by: gap)) { sub.request(.max(1)) }
     }
     return .none
   }
@@ -52,6 +80,20 @@ public class TimedSink<Input, Failure: Error>: Subscriber, Cancellable
   {
     cancel()
     finally(completion)
+  }
+
+  public func startReceiving()
+  {
+    guard start == false else { return }
+
+    scheduler.schedule {
+      [self] in
+      if let sub = subscription
+      {
+        sub.request(.max(1))
+        start = true
+      }
+    }
   }
 
   public func cancel()
