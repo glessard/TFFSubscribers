@@ -9,7 +9,6 @@ public class TimedSink<Upstream: Publisher, Context: Scheduler>
 
   public let combineIdentifier = CombineIdentifier()
 
-  private let lock = Lock()
   private var subscription: Subscription?
 
   private let scheduler: Context
@@ -36,7 +35,6 @@ public class TimedSink<Upstream: Publisher, Context: Scheduler>
 
   deinit {
     subscription?.cancel()
-    lock.clean()
   }
 }
 
@@ -58,19 +56,14 @@ extension TimedSink: Subscriber, Cancellable
 {
   public func receive(subscription: Subscription)
   {
-    lock.lock()
     self.subscription = subscription
-    lock.unlock()
     subscription.request(start ? .max(1) : .none)
   }
 
   public func receive(_ input: Input) -> Subscribers.Demand
   {
     present(input)
-    lock.lock()
-    let sub = subscription
-    lock.unlock()
-    if let sub = sub
+    if let sub = subscription
     {
       scheduler.schedule(after: scheduler.now.advanced(by: gap)) { sub.request(.max(1)) }
     }
@@ -98,10 +91,9 @@ extension TimedSink: Subscriber, Cancellable
 
   public func cancel()
   {
-    lock.lock()
-    let sub = subscription
-    subscription = nil
-    lock.unlock()
-    sub?.cancel()
+    scheduler.schedule {
+      self.subscription?.cancel()
+      self.subscription = nil
+    }
   }
 }
