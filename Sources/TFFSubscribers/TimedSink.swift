@@ -42,7 +42,8 @@ public class TimedSink<Upstream: Publisher, Context: Scheduler>
 
 extension TimedSink where Context == DispatchQueue
 {
-  public convenience init(upstream: Upstream, qos: DispatchQoS = .current,
+  public convenience init(upstream: Upstream,
+                          qos: DispatchQoS = .current,
                           completion: @escaping(Subscribers.Completion<Failure>) -> Void = { _ in },
                           receive: @escaping (Input) -> Void,
                           interval: Context.SchedulerTimeType.Stride,
@@ -87,11 +88,10 @@ extension TimedSink: Subscriber, Cancellable
     guard start == false else { return }
 
     scheduler.schedule {
-      [self] in
-      if let sub = subscription
+      if let sub = self.subscription
       {
         sub.request(.max(1))
-        start = true
+        self.start = true
       }
     }
   }
