@@ -42,10 +42,10 @@ extension TimedSink where Context == DispatchQueue
 {
   public convenience init(upstream: Upstream,
                           qos: DispatchQoS = .current,
-                          completion: @escaping(Subscribers.Completion<Failure>) -> Void = { _ in },
-                          receive: @escaping (Input) -> Void,
                           interval: Context.SchedulerTimeType.Stride,
-                          autostart: Bool = true)
+                          autostart: Bool = true,
+                          receive: @escaping (Input) -> Void,
+                          completion: @escaping(Subscribers.Completion<Failure>) -> Void = { _ in })
   {
     let queue = DispatchQueue(label: #function, qos: qos)
     self.init(upstream: upstream, context: queue, completion: completion, receive: receive, interval: interval, autostart: autostart)

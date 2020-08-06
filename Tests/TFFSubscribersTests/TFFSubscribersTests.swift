@@ -13,14 +13,14 @@ final class TFFSubscribersTests: XCTestCase
     let s = TimedSink(
       upstream: p,
       qos: .utility,
+      interval: .milliseconds(10),
+      autostart: false,
+      receive: { _ in },
       completion: {
         c in
         XCTAssertEqual(c, .finished)
         e.fulfill()
-      },
-      receive: { _ in },
-      interval: .milliseconds(10),
-      autostart: false
+      }
     )
 
     let start = Date()
